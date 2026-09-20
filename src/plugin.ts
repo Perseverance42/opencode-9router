@@ -8,6 +8,7 @@ import {
 } from "./constants.js";
 import { discoverModels } from "./discovery.js";
 import { ensureAPIPath, normalizeBaseURL } from "./utils.js";
+import { v2Plugin } from "./v2.js";
 
 // ── Plugin Entry ────────────────────────────────────────────
 
@@ -104,4 +105,15 @@ export const NineRouterPlugin: Plugin = async ({ client }: PluginInput) => {
       }
     },
   } satisfies Hooks;
+};
+
+// ── Dual Entrypoint (v1 + v2) ───────────────────────────────
+/**
+ * OpenCode >= 2 calls `setup()` on the default export (v2 plugin API);
+ * OpenCode 1 (>= 1.18.29) calls `server()` and expects the v1 hooks object.
+ * Both paths share the discovery pipeline; v1 behaviour is unchanged.
+ */
+export default {
+  ...v2Plugin,
+  server: NineRouterPlugin,
 };
