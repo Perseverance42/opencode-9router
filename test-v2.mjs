@@ -9,7 +9,14 @@
 //      adding a default one.
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import plugin from "./dist/plugin.js";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+// Scope the discovery cache to a throwaway dir so tests never touch the
+// user's real ~/.cache/opencode-9router/ (must run before the plugin import).
+process.env.XDG_CACHE_HOME = mkdtempSync(join(tmpdir(), "opencode-9router-test-"));
+const { default: plugin } = await import("./dist/plugin.js");
 
 console.log("=== Test 1: dual default export shape ===");
 assert.equal(typeof plugin.server, "function", "v1 entrypoint `server` must be exposed");
@@ -118,11 +125,10 @@ assert.ok(
   String(registered.provider.settings.baseURL).endsWith("/v1"),
   "settings.baseURL must be normalized with /v1 path"
 );
-const set2 = t2.editor.modelSets.find(([id]) => id === "9router");
 // Discovery against the unreachable default endpoint fails gracefully and
-// still publishes an (empty) inventory.
-assert.ok(set2, "model inventory must be published even when discovery fails");
-assert.deepEqual(set2[1], [], "empty inventory on discovery failure");
+// must NOT wipe any model inventory (nothing published on failure).
+const set2 = t2.editor.modelSets.find(([id]) => id === "9router");
+assert.equal(set2, undefined, "no models.set on discovery failure");
 console.log("PASS");
 
 console.log("\n=== Test 3: pre-configured 9router-family provider is enriched, not duplicated ===");
@@ -131,7 +137,7 @@ const t3 = makeCtx([custom]);
 await plugin.setup(t3.ctx);
 assert.ok(t3.editor.get("9router-pro"), "pre-configured provider must survive");
 assert.ok(!t3.editor.get("9router"), "no default provider added when family exists");
-assert.equal(t3.editor.get("9router-pro").provider.package, "aisdk:@ai-sdk/openai-compatible", "package must be filled in");
+assert.equal(t3.editor.get("9router-pro").provider.package, "@opencode/ai/providers/openai-compatible", "package must be filled in");
 const set3 = t3.editor.modelSets.find(([id]) => id === "9router-pro");
 assert.ok(set3 && set3[1].length === 2, "discovered models must be published for the family provider");
 

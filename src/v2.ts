@@ -17,8 +17,8 @@ import { discoverModels, type DiscoveryLogger } from "./discovery.js";
 import { ensureAPIPath, normalizeBaseURL } from "./utils.js";
 import type { ModelConfig } from "./types.js";
 
-/** AI SDK package reference in the v2 provider shape. */
-const OPENAI_COMPATIBLE_PACKAGE = "aisdk:@ai-sdk/openai-compatible";
+/** Canonical built-in OpenAI-compatible runtime package in the v2 shape. */
+const OPENAI_COMPATIBLE_PACKAGE = "@opencode/ai/providers/openai-compatible";
 
 /**
  * The v2 plugin context exposes no logging API, so log lines go to the
@@ -113,7 +113,7 @@ export const v2Plugin = Plugin.define({
     const apiURLs = new Map<string, string>();
     const discovered = new Map<string, Record<string, ModelConfig> | null>();
 
-    await Promise.allSettled(
+    const results = await Promise.allSettled(
       targets.map(async (record) => {
         const providerID = record.id;
         const settings = (record.settings ?? {}) as ProviderSettings;
@@ -126,18 +126,17 @@ export const v2Plugin = Plugin.define({
         const discoveryTimeout =
           (settings.discoveryTimeout as number) ?? DISCOVERY_TIMEOUT;
 
-        discovered.set(
+        const models = await discoverModels(
+          baseURL,
+          settings.apiKey as string | undefined,
+          cacheEnabled,
+          cacheTTL,
+          discoveryTimeout,
           providerID,
-          await discoverModels(
-            baseURL,
-            settings.apiKey as string | undefined,
-            cacheEnabled,
-            cacheTTL,
-            discoveryTimeout,
-            providerID,
-            log,
-          ),
+          log,
         );
+        discovered.set(providerID, models);
+        return { providerID, models };
       }),
     );
 
@@ -149,9 +148,13 @@ export const v2Plugin = Plugin.define({
           if (!provider.package) provider.package = OPENAI_COMPATIBLE_PACKAGE;
           provider.settings = { ...provider.settings, baseURL: apiURL };
         });
+        // Only publish on success: setting an empty inventory would wipe
+        // models the user hand-configured for this provider while the
+        // router is unreachable.
+        if (!models) continue;
         editor.models.set(
           providerID as never,
-          Object.entries(models ?? {}).map(([modelID, config]) =>
+          Object.entries(models).map(([modelID, config]) =>
             toModelInfo(providerID, modelID, config),
           ) as never,
         );
@@ -159,7 +162,12 @@ export const v2Plugin = Plugin.define({
     });
 
     // ── Summary ──
-    for (const [providerID, models] of discovered) {
+    for (const result of results) {
+      if (result.status === "rejected") {
+        await log("error", `Provider pipeline error: ${result.reason}`);
+        continue;
+      }
+      const { providerID, models } = result.value;
       const apiURL = apiURLs.get(providerID);
       if (models) {
         await log(
