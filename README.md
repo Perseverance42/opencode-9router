@@ -4,20 +4,9 @@ OpenCode plugin provider for [9Router](https://github.com/decolua/9router) — F
 
 Registers 9Router as a custom provider in OpenCode with auto-discovery of models.
 
-> **OpenCode v1 and v2 compatible.** One package, one install line. On OpenCode v2 use the `plugins` config key (examples below cover both).
+> **OpenCode v1 and v2 compatible.** The config examples below use the classic `plugin`/`provider` syntax, which both versions accept (OpenCode 2 normalizes it automatically). On OpenCode 2 you may also use the native equivalent: `plugins` instead of `plugin`, `providers`/`package`/`settings` instead of `provider`/`npm`/`options`.
 
 ## Quick Start
-
-OpenCode **v2**:
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "plugins": ["@vheins/opencode-9router@latest"]
-}
-```
-
-OpenCode **v1**:
 
 ```json
 {
@@ -41,22 +30,11 @@ The plugin will auto-discover models from `http://localhost:20128` (default).
 - **Dynamic model list** — All models from 9Router are available, including custom combos
 - **Combo multimodal defaults** — Combo models (`owned_by: "combo"`) that expose no capability info are forced to accept text/image/audio input with tool calling, reasoning, 256K context, 128K output, and `low`/`medium`/`high`/`xhigh`/`max`/`minimal`/`thinking` variants
 - **OpenAI-compatible** — Uses `@ai-sdk/openai-compatible`
-- **Type-safe** — Uses the `config` hook for provider registration that conforms to the OpenCode config schema
+- **Type-safe** — Registers providers through OpenCode's plugin API (v2 provider registry / v1 `config` hook) conforming to the OpenCode config schema
 
 ## Installation
 
 ### From npm (recommended)
-
-OpenCode **v2**:
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "plugins": ["@vheins/opencode-9router@latest"]
-}
-```
-
-OpenCode **v1**:
 
 ```json
 {
@@ -102,38 +80,6 @@ Add one or more 9Router-family providers with custom options:
 ```
 
 Each provider key must start with `9router`. The `npm` must be `@ai-sdk/openai-compatible`. The `name` is a display label shown in OpenCode.
-
-OpenCode **v2** equivalent (native config shape — `plugins`/`providers`, `package`, `settings`):
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "plugins": ["@vheins/opencode-9router@latest"],
-  "providers": {
-    "9router": {
-      "package": "aisdk:@ai-sdk/openai-compatible",
-      "name": "Your Provider",
-      "settings": {
-        "baseURL": "https://your-9router-endpoint.example.com/v1",
-        "apiKey": "{env:ROUTER_API_KEY}",
-        "cache": true,
-        "cacheTTL": 10800000,
-        "discoveryTimeout": 60000
-      }
-    },
-    "9router-local": {
-      "package": "aisdk:@ai-sdk/openai-compatible",
-      "name": "Local Router",
-      "settings": {
-        "baseURL": "http://127.0.0.1:20128/v1",
-        "apiKey": "sk-...",
-        "cache": true,
-        "discoveryTimeout": 60000
-      }
-    }
-  }
-}
-```
 
 > **Never commit real API keys.** Replace the `baseURL`/`apiKey` above with your own endpoint and a placeholder such as `{env:ROUTER_API_KEY}` (or a dummy value like `sk-...`). Real keys belong in environment variables, not in `opencode.json` or this README.
 
@@ -340,7 +286,8 @@ git push --follow-tags
 ```
 opencode-9router/
   src/
-    plugin.ts         # Plugin entry (provider registration + config hook)
+    plugin.ts         # Plugin entry (v1 config hook + dual default export)
+    v2.ts             # OpenCode v2 adapter (provider registry transforms)
     discovery.ts      # Model discovery pipeline
     capabilities.ts   # Capability resolution (catalog + per-model API)
     cache.ts          # Discovery + models.dev cache
